@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyber Odyssey: Linux Lab</title>
+<style>
+:root{--bg:#07111f;--panel:#0d1d31;--line:#1d4260;--cyan:#57e6ff;--green:#72f1a8;--red:#ff6b7a;--yellow:#ffd166;--text:#d9f4ff}
+*{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top,#102a43,#050a12 70%);color:var(--text);font-family:Consolas,monospace;overflow:hidden}
+#app{height:100vh;display:flex;flex-direction:column}
+header{height:64px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;background:#081321;border-bottom:1px solid var(--line)}
+.logo{font-size:22px;color:var(--cyan);font-weight:bold;letter-spacing:1px}.stats{display:flex;gap:18px;font-size:13px}.pill{padding:7px 10px;border:1px solid var(--line);border-radius:7px;background:#0b1a2a}
+main{display:grid;grid-template-columns:1fr 350px;gap:12px;flex:1;min-height:0;padding:12px}
+#gameWrap{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#07101b;min-height:0}
+canvas{width:100%;height:100%;display:block;image-rendering:pixelated}
+#hint{position:absolute;left:14px;bottom:12px;background:#07101bd9;border:1px solid var(--line);padding:9px 12px;border-radius:7px;font-size:12px;color:#b7d9e8}
+aside{display:flex;flex-direction:column;gap:10px;min-height:0}
+.panel{background:linear-gradient(145deg,#0d1d31,#091522);border:1px solid var(--line);border-radius:10px;padding:13px;overflow:auto}
+.panel h2{font-size:15px;color:var(--cyan);margin:0 0 10px}.panel h3{font-size:13px;color:var(--yellow);margin:12px 0 6px}
+#missionText{font-size:12px;line-height:1.5}.objective{padding:8px;border-left:3px solid var(--green);background:#0a2430;margin:8px 0;font-size:12px}
+button{font:inherit;cursor:pointer;color:var(--text);background:#102c42;border:1px solid #2c6682;border-radius:6px;padding:8px 10px;margin:3px 0}button:hover{background:#17445c}button:disabled{opacity:.4;cursor:not-allowed}
+#terminal{height:190px;background:#02070c;border:1px solid #24465b;border-radius:7px;padding:10px;overflow:auto;font-size:12px;line-height:1.5;white-space:pre-wrap}
+#cmd{width:100%;background:#061019;color:var(--green);border:1px solid #2c6682;padding:9px;border-radius:6px;font:12px Consolas,monospace;margin-top:7px}
+.log{font-size:11px;line-height:1.5;color:#9ec4d5}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--yellow)}
+#overlay{position:absolute;inset:0;background:#020711e8;display:flex;align-items:center;justify-content:center;padding:30px;z-index:4}
+.card{max-width:620px;background:#0b1b2d;border:1px solid #2c6682;border-radius:12px;padding:25px;box-shadow:0 0 40px #000}.card h1{color:var(--cyan);margin-top:0}.card p{font:13px/1.6 Arial,sans-serif;color:#c5dce6}.card button{margin-top:10px}
+#toast{position:absolute;top:14px;left:50%;transform:translateX(-50%);background:#102b3c;border:1px solid var(--cyan);padding:10px 16px;border-radius:8px;display:none;z-index:3;font-size:12px}
+@media(max-width:850px){main{grid-template-columns:1fr;height:auto;overflow:auto}#gameWrap{height:55vh;min-height:320px}aside{display:grid;grid-template-columns:1fr 1fr}header{height:55px}.stats{gap:6px;font-size:10px}.logo{font-size:15px}}
+</style>
+</head>
+<body>
+<div id="app">
+<header><div class="logo">⚡ CYBER ODYSSEY // LINUX LAB</div><div class="stats"><span class="pill">LEVEL <b id="level">1</b></span><span class="pill">XP <b id="xp">0</b>/100</span><span class="pill">INTEGRITY <b id="integrity">100</b>%</span></div></header>
+<main>
+<section id="gameWrap">
+<canvas id="game" width="900" height="570"></canvas>
+<div id="toast"></div>
+<div id="hint">WASD / Arrow keys: move • E: interact • T: open terminal</div>
+<div id="overlay"><div class="card">
+<h1>CYBER ODYSSEY</h1>
+<p>You are a junior security analyst at <b>NovaGrid Labs</b>. A fictional training network has been compromised. Explore the 2D lab, inspect systems, and learn Linux and defensive cybersecurity through safe, simulated missions.</p>
+<p><b>Rules:</b> Everything happens inside this game. No real systems, credentials, or networks are touched.</p>
+<button id="startBtn">START TRAINING</button>
+</div></div>
+</section>
+<aside>
+<div class="panel"><h2>ACTIVE MISSION</h2><div id="missionText"></div><div class="objective" id="objective"></div><button id="nextBtn" disabled>Complete objective first</button></div>
+<div class="panel"><h2>LINUX TERMINAL</h2><div id="terminal">Terminal locked. Press T near a workstation.</div><input id="cmd" placeholder="type a command, e.g. help" disabled autocomplete="off"></div>
+<div class="panel"><h2>FIELD NOTES</h2><div class="log" id="notes">• Move around the lab and interact with highlighted objects.<br>• Commands are simulated and intentionally safe.<br>• Learn the reason behind every action.</div></div>
+</aside>
+</main>
+</div>
+<script>
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const W=900,H=570; let running=false,keys={},near=null,terminalOpen=false;
+let player={x:115,y:470,w:24,h:30,s:3.2}; let xp=0,level=1,integrity=100,mission=0,completed=false;
+const missions=[
+{title:"01 // ORIENTATION",desc:"Learn how a security analyst navigates a controlled environment.",objective:"Walk to the blue workstation and press E.",target:"workstation",reward:25},
+{title:"02 // LINUX RECON",desc:"Use basic Linux commands to understand files and the current user.",objective:"Open the workstation terminal and run: whoami",target:"whoami",reward:25},
+{title:"03 // FILE TRIAGE",desc:"Security analysts inspect suspicious files without executing them.",objective:"In the terminal, run: ls",target:"ls",reward:25},
+{title:"04 // LOG AWARENESS",desc:"Logs help defenders reconstruct events. Read the simulated auth log.",objective:"In the terminal, run: cat /var/log/auth.log",target:"logs",reward:25},
+{title:"05 // DEFENSIVE DECISION",desc:"A suspicious login appears in the log. Flag it for the incident-response team.",objective:"Use the terminal command: flag suspicious-login",target:"flag",reward:30},
+{title:"06 // FINAL CHECK",desc:"Review what you learned and secure the training lab.",objective:"Run: checklist",target:"checklist",reward:40}
+];
+const objects=[
+{x:100,y:410,w:95,h:65,name:"workstation",label:"LINUX WORKSTATION",color:"#1e7595"},
+{x:680,y:100,w:110,h:70,name:"server",label:"TRAINING SERVER",color:"#365b8a"},
+{x:410,y:230,w:90,h:70,name:"console",label:"SECURITY CONSOLE",color:"#7b5c25"},
+{x:690,y:420,w:100,h:60,name:"exit",label:"EXIT GATE",color:"#315f46"}
+];
+const walls=[{x:0,y:0,w:900,h:22},{x:0,y:548,w:900,h:22},{x:0,y:0,w:22,h:570},{x:878,y:0,w:22,h:570},{x:250,y:85,w:24,h:240},{x:520,y:330,w:24,h:170},{x:300,y:90,w:180,h:22}];
+function draw(){
+ctx.clearRect(0,0,W,H);ctx.fillStyle="#07121f";ctx.fillRect(0,0,W,H);
+ctx.strokeStyle="#0d2a3e";ctx.lineWidth=1;
+for(let x=22;x<878;x+=32){ctx.beginPath();ctx.moveTo(x,22);ctx.lineTo(x,548);ctx.stroke()}
+for(let y=22;y<548;y+=32){ctx.beginPath();ctx.moveTo(22,y);ctx.lineTo(878,y);ctx.stroke()}
+ctx.fillStyle="#0b2030";ctx.fillRect(35,35,830,45);ctx.fillStyle="#78b6cc";ctx.font="13px Consolas";ctx.fillText("NOVAGRID LABS // TRAINING FLOOR // AUTHORIZED SIMULATION",55,62);
+walls.forEach(w=>{ctx.fillStyle="#183247";ctx.fillRect(w.x,w.y,w.w,w.h);ctx.strokeStyle="#2d5970";ctx.strokeRect(w.x,w.y,w.w,w.h)});
+objects.forEach(o=>{
+ctx.fillStyle=o.color;ctx.fillRect(o.x,o.y,o.w,o.h);ctx.strokeStyle="#75d7ef";ctx.strokeRect(o.x,o.y,o.w,o.h);
+ctx.fillStyle="#d9f4ff";ctx.font="11px Consolas";ctx.fillText(o.label,o.x,o.y-8);
+if(near===o){ctx.strokeStyle="#72f1a8";ctx.lineWidth=3;ctx.strokeRect(o.x-4,o.y-4,o.w+8,o.h+8);ctx.lineWidth=1;ctx.fillStyle="#72f1a8";ctx.fillText("E: INTERACT",o.x,o.y+o.h+17)}
+if(o.name==="workstation"){ctx.fillStyle="#07111f";ctx.fillRect(o.x+12,o.y+10,70,35);ctx.fillStyle="#57e6ff";ctx.fillRect(o.x+18,o.y+16,58,23);ctx.fillStyle="#203c4c";ctx.fillRect(o.x+38,o.y+45,30,8)}
+if(o.name==="server"){for(let i=0;i<3;i++){ctx.fillStyle="#07111f";ctx.fillRect(o.x+12,o.y+10+i*17,86,12);ctx.fillStyle="#72f1a8";ctx.fillRect(o.x+20,o.y+14+i*17,5,5)}}
+});
+ctx.fillStyle="#ffda8a";ctx.font="12px Consolas";ctx.fillText("SAFE ZONE",55,520);
+ctx.fillStyle="#57e6ff";ctx.fillRect(player.x,player.y,player.w,player.h);ctx.fillStyle="#b8f7ff";ctx.fillRect(player.x+5,player.y+5,14,9);ctx.fillStyle="#17445c";ctx.fillRect(player.x+4,player.y+18,16,8);
+}
+function collides(x,y){return walls.some(w=>x<w.x+w.w&&x+player.w>w.x&&y<w.y+w.h&&y+player.h>w.y)}
+function update(){
+if(!running)return;
+let dx=0,dy=0;if(keys.w||keys.ArrowUp)dy-=player.s;if(keys.s||keys.ArrowDown)dy+=player.s;if(keys.a||keys.ArrowLeft)dx-=player.s;if(keys.d||keys.ArrowRight)dx+=player.s;
+if(!collides(player.x+dx,player.y))player.x=Math.max(25,Math.min(850,player.x+dx));
+if(!collides(player.x,player.y+dy))player.y=Math.max(28,Math.min(520,player.y+dy));
+near=null;objects.forEach(o=>{if(player.x<o.x+o.w+35&&player.x+player.w>o.x-35&&player.y<o.y+o.h+35&&player.y+player.h>o.y-35)near=o});
+draw();requestAnimationFrame(update);
+}
+function toast(t){let e=document.getElementById('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2400)}
+function print(t,cl=""){let e=document.getElementById('terminal');e.innerHTML+=`<div class="${cl}">${t}</div>`;e.scrollTop=e.scrollHeight}
+function setMission(){let m=missions[mission];document.getElementById('missionText').innerHTML=`<b>${m.title}</b><br>${m.desc}`;document.getElementById('objective').textContent=m.objective;document.getElementById('nextBtn').disabled=!completed;document.getElementById('nextBtn').textContent=completed?"NEXT MISSION →":"Complete objective first"}
+function addXP(n){xp+=n;if(xp>=100){xp-=100;level++;toast("LEVEL UP! You are now level "+level)}document.getElementById('xp').textContent=xp;document.getElementById('level').textContent=level}
+function complete(){if(completed)return;completed=true;addXP(missions[mission].reward);document.getElementById('integrity').textContent=integrity;document.getElementById('nextBtn').disabled=false;document.getElementById('nextBtn').textContent="NEXT MISSION →";print("OBJECTIVE COMPLETE. XP +"+missions[mission].reward,"good");toast("Mission complete!")}
+function interact(){
+if(!near)return toast("Nothing nearby. Move closer to an object.");
+if(near.name==="workstation"){terminalOpen=true;document.getElementById('cmd').disabled=false;document.getElementById('terminal').textContent="NovaGrid Linux Terminal v1.0 (SIMULATED)\nType 'help' to see safe commands.\n";document.getElementById('cmd').focus();if(mission===0){complete()}}
+else if(near.name==="server"){print("SERVER STATUS: ONLINE\nPatch level: TRAINING-ONLY\nNo real network connection.","warn");toast("Server inspected. No real connection.");}
+else if(near.name==="console"){print("SECURITY CONSOLE\nAlerts: 1 simulated suspicious login\nUse the terminal to investigate.","warn");}
+else if(near.name==="exit"){if(mission===missions.length-1&&completed){toast("Training complete! NovaGrid is secured.");document.getElementById('missionText').innerHTML="<b>COURSE COMPLETE</b><br>You finished the Linux Lab foundation path.";document.getElementById('objective').textContent="You can replay the lab or expand it with more missions."}else toast("Finish the active mission before leaving.")}
+}
+function command(raw){
+let c=raw.trim().toLowerCase();if(!c)return;
+print("$ "+raw);
+if(c==="help"){print("SAFE COMMANDS:\nwhoami\npwd\nls\ncat /var/log/auth.log\nflag suspicious-login\nchecklist\nclear\nhelp","good")}
+else if(c==="whoami"){print("analyst-trainee","good");if(missions[mission].target==="whoami")complete()}
+else if(c==="pwd"){print("/home/analyst-trainee")}
+else if(c==="ls"){print("Desktop  Documents  evidence  notes.txt  readme.md","good");if(missions[mission].target==="ls")complete()}
+else if(c==="cat /var/log/auth.log"){print("SIMULATED AUTH LOG:\n[training] Accepted login for analyst-trainee\n[training] Failed login for admin from 10.10.10.24\n[training] Failed login for admin from 10.10.10.24\n[training] Alert: repeated failures detected","warn");if(missions[mission].target==="logs")complete()}
+else if(c==="flag suspicious-login"){print("Alert created: SUSPICIOUS-LOGIN\nStatus: sent to fictional incident-response queue","good");if(missions[mission].target==="flag")complete()}
+else if(c==="checklist"){print("FINAL CHECKLIST:\n[✓] Identify user context\n[✓] List files safely\n[✓] Read logs\n[✓] Flag suspicious activity\n[✓] Stay inside authorized scope","good");if(missions[mission].target==="checklist")complete()}
+else if(c==="clear"){document.getElementById('terminal').textContent=""}
+else{print("Command not available in this training shell. Type 'help'.","bad");integrity=Math.max(0,integrity-2);document.getElementById('integrity').textContent=integrity}
+}
+document.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key.toLowerCase()==="e")interact();if(e.key.toLowerCase()==="t"){terminalOpen=true;document.getElementById('cmd').disabled=false;document.getElementById('cmd').focus()}});
+document.addEventListener('keyup',e=>keys[e.key]=false);
+document.getElementById('cmd').addEventListener('keydown',e=>{if(e.key==="Enter"){command(e.target.value);e.target.value=""}});
+document.getElementById('startBtn').onclick=()=>{document.getElementById('overlay').style.display="none";running=true;setMission();update();toast("Mission 1 started. Find the blue workstation.")};
+document.getElementById('nextBtn').onclick=()=>{if(!completed)return;mission++;completed=false;if(mission>=missions.length){mission=missions.length-1;completed=true;return}setMission();toast("New mission unlocked.");};
+setMission();draw();
+</script>
+</body>
+</html>
